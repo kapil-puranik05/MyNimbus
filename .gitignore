@@ -3,3 +3,4 @@ py-app
 py-app/*
 .env
 .env.*
+builds
