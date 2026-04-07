@@ -4,3 +4,4 @@ py-app/*
 .env
 .env.*
 builds
+/zip/*

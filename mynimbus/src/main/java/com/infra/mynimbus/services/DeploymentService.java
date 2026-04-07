@@ -9,7 +9,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -22,6 +21,7 @@ import com.infra.mynimbus.dtos.BuildResponse;
 import com.infra.mynimbus.dtos.RunContainerRequest;
 import com.infra.mynimbus.dtos.RunContainerResponse;
 import com.infra.mynimbus.exceptions.ContainerStartException;
+import com.infra.mynimbus.exceptions.CommandExecutionException;
 import com.infra.mynimbus.exceptions.InvalidPortException;
 import com.infra.mynimbus.exceptions.InvalidZipFileException;
 import com.infra.mynimbus.exceptions.PortAllocationException;
@@ -146,5 +146,44 @@ public class DeploymentService {
         } catch(IOException e) {
             throw new PortAllocationException("Failed to allocate a port: " + e); 
         } 
+    }
+
+    public String stopContainer(String containerId) {
+        ProcessBuilder pb = new ProcessBuilder("docker", "stop", containerId);
+        pb.redirectErrorStream(true);
+        try {
+            Process process = pb.start();
+            String output;
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                output = br.readLine();
+            }
+            int exitCode = process.waitFor();
+            if(exitCode != 0 || output == null || output.isBlank()) {
+                throw new CommandExecutionException("Failed to stop container: " + containerId);
+            }
+            return output.trim();
+        } catch (Exception e) {
+            throw new CommandExecutionException("Error stopping container: " + e.getMessage());
+        }
+    }
+
+    public String executeDockerCommand(String containerId, String command) {
+        ProcessBuilder pb = new ProcessBuilder("docker", command, containerId);
+        System.out.println("Running command: " + String.join(" ", pb.command()));
+        pb.redirectErrorStream(true);
+        try {
+            Process process = pb.start();
+            String output;
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                output = br.readLine();
+            }
+            int exitCode = process.waitFor();
+            if(exitCode != 0 || output == null || output.isBlank()) {
+                throw new CommandExecutionException("Failed to " + command + " container: " + containerId);
+            }
+            return output.trim();
+        } catch (Exception e) {
+            throw new CommandExecutionException("Error " + command + "ing" + " container: " + e.getMessage());
+        }
     }
 }

@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.infra.mynimbus.dtos.CommandExecutionRequest;
 import com.infra.mynimbus.dtos.RunContainerRequest;
 import com.infra.mynimbus.services.DeploymentService;
 
@@ -29,6 +30,16 @@ public class DeploymentController {
     @PostMapping("/run")
     public ResponseEntity<?> runContainer(@RequestBody RunContainerRequest request) {
         return new ResponseEntity<>(service.runContainer(request), HttpStatus.OK);
+    }
+
+    @PostMapping("/restart")
+    public ResponseEntity<?> restartContainer(@RequestBody CommandExecutionRequest request) {
+        return new ResponseEntity<>(service.executeDockerCommand(request.getContainerId(), "restart"), HttpStatus.OK);
+    }
+
+    @PostMapping("/stop")
+    public ResponseEntity<?> stopContainer(@RequestBody CommandExecutionRequest request) {
+        return new ResponseEntity<>(service.executeDockerCommand(request.getContainerId(), "stop"), HttpStatus.OK);
     }
 }
 
