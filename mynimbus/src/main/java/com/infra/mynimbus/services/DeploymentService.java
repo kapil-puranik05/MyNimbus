@@ -4,16 +4,27 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.infra.mynimbus.dtos.BuildResponse;
+import com.infra.mynimbus.dtos.RunContainerRequest;
+import com.infra.mynimbus.dtos.RunContainerResponse;
+import com.infra.mynimbus.exceptions.ContainerStartException;
+import com.infra.mynimbus.exceptions.InvalidPortException;
 import com.infra.mynimbus.exceptions.InvalidZipFileException;
+import com.infra.mynimbus.exceptions.PortAllocationException;
 import com.infra.mynimbus.exceptions.WorkerFailureException;
 
 @Service
@@ -21,7 +32,7 @@ public class DeploymentService {
     @Value("${base.url}")
     public String baseUrl;
 
-    public String buildImage(MultipartFile file) {
+    public BuildResponse buildImage(MultipartFile file) {
         try {
             if (file.isEmpty() || !file.getOriginalFilename().endsWith(".zip")) {
                 throw new InvalidZipFileException("Please upload a valid zip file");
@@ -58,7 +69,9 @@ public class DeploymentService {
             if(result == null || result.isBlank()) {
                 throw new WorkerFailureException("Worker did not return a result");
             }
-            return result;
+            BuildResponse response = new BuildResponse();
+            response.setContainerId(result);
+            return response;
         } catch(InvalidZipFileException e) {
             throw e;
         } catch(IOException e) {
@@ -71,7 +84,67 @@ public class DeploymentService {
         }
     }
 
-    public void runContainer(String containerId) {
-        
+    public RunContainerResponse runContainer(RunContainerRequest request) {
+        String imageName = request.getImageName();
+        Map<String, String> envVars = request.getEnvVars();
+        int hostPort = getFreePort();
+        int containerPort = getContainerPort(envVars);
+        List<String> command = new ArrayList<>();
+        command.add("docker");
+        command.add("run");
+        command.add("-d");
+        command.add("-p");
+        command.add(hostPort + ":" + containerPort);
+        for(Map.Entry<String, String> entry : envVars.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+            if(key != null && value != null && key.matches("^[A-Z_][A-Z0-9_]*$")) {
+                command.add("-e");
+                command.add(key + "=" + value);
+            }
+        }
+        command.add(imageName);
+        System.out.println("Running command: " + String.join(" ", command));
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(true);
+        String containerId;
+        try {
+            Process process = pb.start();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                containerId = reader.readLine();
+            }
+            int exitCode = process.waitFor();
+            if (exitCode != 0 || containerId == null || containerId.isBlank()) {
+                throw new ContainerStartException("Failed to start container");
+            }
+        } catch (Exception e) {
+            throw new ContainerStartException("Error occurred while starting the container"+ e);
+        }
+        containerId = containerId.trim();
+        RunContainerResponse response = new RunContainerResponse();
+        response.setContainerId(containerId);
+        response.setContainerPort(Integer.toString(containerPort));
+        response.setHostPort(Integer.toString(hostPort));
+        return response;
+    }
+
+    public int getContainerPort(Map<String, String> envVars) {
+        String port = envVars.get("PORT");
+        if(port == null) {
+            return 8080;
+        }
+        try {
+            return Integer.parseInt(port);
+        } catch (Exception e) {
+            throw new InvalidPortException("Invalid PORT value: " + port + e);
+        }
+    }
+
+    public int getFreePort() {
+        try(ServerSocket socket = new ServerSocket(0)) {
+            return socket.getLocalPort(); 
+        } catch(IOException e) {
+            throw new PortAllocationException("Failed to allocate a port: " + e); 
+        } 
     }
 }
