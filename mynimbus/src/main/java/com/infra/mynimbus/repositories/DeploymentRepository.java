@@ -1,6 +1,7 @@
 package com.infra.mynimbus.repositories;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,4 +14,5 @@ import com.infra.mynimbus.models.Deployment;
 public interface DeploymentRepository extends JpaRepository<Deployment, UUID>{
     @Query(value = "SELECT * FROM deployments d WHERE d.buildId = :buildId", nativeQuery = true)
     List<Deployment> getDeploymentsByBuildId(UUID buildId);
+    Optional<Deployment> findByContainerId(String containerId);
 }

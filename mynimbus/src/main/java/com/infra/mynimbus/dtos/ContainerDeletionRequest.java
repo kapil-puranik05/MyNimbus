@@ -3,6 +3,6 @@ package com.infra.mynimbus.dtos;
 import lombok.Data;
 
 @Data
-public class RunContainerRequest {
+public class ContainerDeletionRequest {
     private String containerId;
 }

@@ -8,7 +8,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import com.infra.mynimbus.dtos.ErrorResponse;
 import com.infra.mynimbus.exceptions.BuildNotFoundException;
 import com.infra.mynimbus.exceptions.CommandExecutionException;
+import com.infra.mynimbus.exceptions.ContainerNotFoundException;
 import com.infra.mynimbus.exceptions.ContainerStartException;
+import com.infra.mynimbus.exceptions.ContainerStopException;
 import com.infra.mynimbus.exceptions.InvalidCredentialsException;
 import com.infra.mynimbus.exceptions.InvalidPortException;
 import com.infra.mynimbus.exceptions.InvalidZipFileException;
@@ -25,6 +27,22 @@ public class GlobalExceptionHandler {
         response.setMessage(e.getMessage());
         response.setStatus(HttpStatus.NOT_FOUND.value());
         return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(ContainerNotFoundException.class)
+    public ResponseEntity<?> handleContainerNotFoundException(ContainerNotFoundException e) {
+        ErrorResponse response = new ErrorResponse();
+        response.setMessage(e.getMessage());
+        response.setStatus(HttpStatus.NOT_FOUND.value());
+        return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(ContainerStopException.class)
+    public ResponseEntity<?> handleContainerStopException(ContainerStopException e) {
+        ErrorResponse response = new ErrorResponse();
+        response.setMessage(e.getMessage());
+        response.setStatus(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     @ExceptionHandler(CommandExecutionException.class)

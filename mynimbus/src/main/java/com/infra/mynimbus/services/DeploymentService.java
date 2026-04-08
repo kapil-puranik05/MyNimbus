@@ -20,11 +20,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.infra.mynimbus.dtos.BuildResponse;
-import com.infra.mynimbus.dtos.RunContainerRequest;
+import com.infra.mynimbus.dtos.ContainerizationRequest;
 import com.infra.mynimbus.dtos.RunContainerResponse;
 import com.infra.mynimbus.exceptions.ContainerStartException;
+import com.infra.mynimbus.exceptions.ContainerStopException;
 import com.infra.mynimbus.exceptions.BuildNotFoundException;
 import com.infra.mynimbus.exceptions.CommandExecutionException;
+import com.infra.mynimbus.exceptions.ContainerNotFoundException;
 import com.infra.mynimbus.exceptions.InvalidPortException;
 import com.infra.mynimbus.exceptions.InvalidZipFileException;
 import com.infra.mynimbus.exceptions.PortAllocationException;
@@ -123,7 +125,7 @@ public class DeploymentService {
         }
     }
 
-    public RunContainerResponse runContainer(RunContainerRequest request) {
+    public RunContainerResponse containerize(ContainerizationRequest request) {
         String imageName = request.getImageName();
         Map<String, String> envVars = request.getEnvVars();
         int hostPort = getFreePort();
@@ -144,6 +146,14 @@ public class DeploymentService {
         }
         command.add(imageName);
         System.out.println("Running command: " + String.join(" ", command));
+        Deployment deployment = new Deployment();
+        Build build = buildRepository.findByImageName(imageName).orElseThrow(() -> new BuildNotFoundException("Build with given image name was not found"));
+        deployment.setBuild(build);
+        deployment.setStatus(DeploymentStatus.PENDING);
+        deployment.setContainerPort(containerPort);
+        deployment.setHostPort(hostPort);
+        deployment.setContainerId("Containerizing...");
+        deploymentRepository.save(deployment);
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
         String containerId;
@@ -154,12 +164,18 @@ public class DeploymentService {
             }
             int exitCode = process.waitFor();
             if (exitCode != 0 || containerId == null || containerId.isBlank()) {
+                deployment.setContainerId("-x-");
+                deployment.setStatus(DeploymentStatus.FAILED);
+                deploymentRepository.save(deployment);
                 throw new ContainerStartException("Failed to start container");
             }
         } catch (Exception e) {
             throw new ContainerStartException("Error occurred while starting the container"+ e);
         }
         containerId = containerId.trim();
+        deployment.setContainerId(containerId);
+        deployment.setStatus(DeploymentStatus.RUNNING);
+        deploymentRepository.save(deployment);
         RunContainerResponse response = new RunContainerResponse();
         response.setContainerId(containerId);
         response.setContainerPort(Integer.toString(containerPort));
@@ -191,6 +207,10 @@ public class DeploymentService {
         ProcessBuilder pb = new ProcessBuilder("docker", command, containerId);
         System.out.println("Running command: " + String.join(" ", pb.command()));
         pb.redirectErrorStream(true);
+        Deployment deployment = deploymentRepository.findByContainerId(containerId).orElseThrow(() -> new ContainerNotFoundException("Container with given container id not found"));
+        if("stop".equals(command) && !deployment.getStatus().equals(DeploymentStatus.RUNNING)) {
+            throw new ContainerStopException("Container is not running");
+        }
         try {
             Process process = pb.start();
             String output;
@@ -201,27 +221,26 @@ public class DeploymentService {
             if(exitCode != 0 || output == null || output.isBlank()) {
                 throw new CommandExecutionException("Failed to " + command + " container: " + containerId);
             }
+            if("stop".equals(command)) {
+                deployment.setStatus(DeploymentStatus.STOPPED);
+                deploymentRepository.save(deployment);
+            }
             return output.trim();
         } catch (Exception e) {
             throw new CommandExecutionException("Error " + command + "ing" + " container: " + e.getMessage());
         }
     }
 
-    public String removeContainer(String containerId) {
+    public void removeContainer(String containerId) {
         ProcessBuilder pb = new ProcessBuilder("docker", "rm", "-rf", containerId);
         System.out.println("Running command: " + String.join(" ", pb.command()));
         pb.redirectErrorStream(true);
         try {
             Process process = pb.start();
-            String output;
-            try(BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                output = br.readLine();
-            }
             int exitCode = process.waitFor();
-            if(exitCode != 0 || output == null || output.isBlank()) {
+            if(exitCode != 0) {
                 throw new CommandExecutionException("Failed to remove container: " + containerId);
             }
-            return output.trim();
         } catch(Exception e) {
             throw new CommandExecutionException("Error occured while deleting the container: " + containerId);
         }
@@ -249,13 +268,17 @@ public class DeploymentService {
         return buildRepository.getBuildsByUserId(userId);
     }
 
+    public List<Deployment> getDeploymentsByBuild(UUID buildId) {
+        return deploymentRepository.getDeploymentsByBuildId(buildId);
+    }
+
     public void deleteImage(UUID buildId) {
         if(!buildRepository.existsById(buildId)) {
             throw new BuildNotFoundException("Build with given Id was not found");
         }
         Build build = buildRepository.findById(buildId).get();
-        List<Deployment> runningDeployments = deploymentRepository.getDeploymentsByBuildId(buildId);
-        for(Deployment deployment : runningDeployments) {
+        List<Deployment> deployments = deploymentRepository.getDeploymentsByBuildId(buildId);
+        for(Deployment deployment : deployments) {
             String containerId = deployment.getContainerId();
             if(deployment.getStatus().equals(DeploymentStatus.RUNNING)) {
                 executeDockerCommand(containerId, "stop");
