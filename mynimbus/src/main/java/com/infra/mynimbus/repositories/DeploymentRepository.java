@@ -11,6 +11,6 @@ import com.infra.mynimbus.models.Deployment;
 
 @Repository
 public interface DeploymentRepository extends JpaRepository<Deployment, UUID>{
-    @Query(value = "SELECT * FROM deployemnts d WHERE d.buildId = :buidId", nativeQuery = true)
+    @Query(value = "SELECT * FROM deployments d WHERE d.buildId = :buildId", nativeQuery = true)
     List<Deployment> getDeploymentsByBuildId(UUID buildId);
 }
