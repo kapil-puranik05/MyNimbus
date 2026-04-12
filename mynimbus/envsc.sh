@@ -3,3 +3,4 @@ export JWT_SECRET=my-super-secure-secret-key-that-is-at-least-32-bytes
 export DB_URL=jdbc:postgresql://localhost:5432/mynimbus
 export DB_USER=nimbus
 export DB_PASSWORD=root
+export SERVER_PORT=8081
