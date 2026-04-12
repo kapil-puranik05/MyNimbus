@@ -73,7 +73,7 @@ public class DeploymentController {
 
     @DeleteMapping("/delete-container")
     public ResponseEntity<?> deleteContainer(@RequestBody ContainerDeletionRequest request) {
-        service.removeContainer(request.getContainerId());
+        service.deleteContainer(request.getContainerId());
         return new ResponseEntity<>("Container " + request.getContainerId() + " removed ", HttpStatus.OK);
     }
 }

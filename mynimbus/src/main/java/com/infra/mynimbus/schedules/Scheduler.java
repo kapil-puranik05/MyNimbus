@@ -23,8 +23,10 @@ public class Scheduler {
     @Scheduled(fixedRate = 3600000)
     public void runTask() {
         List<FileDeletionMetaData> olderFiles = buildRepository.getOlderFiles();
+        System.out.println("Executing Zip deletion job");
         for(FileDeletionMetaData data : olderFiles) {
-            Path filePath = Paths.get(data.getFilePath(), data.getFilename());
+            Path filePath = Paths.get(data.getZipPath(), data.getFilename());
+            System.out.println(data.getZipPath() + "/" + data.getFilename());
             try {
                 Files.delete(filePath);
                 System.out.println("File " + data.getFilename() + " deleted successfully");

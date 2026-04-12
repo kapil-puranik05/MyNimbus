@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.infra.mynimbus.util.DeploymentStatus;
 
 import jakarta.persistence.Column;
@@ -34,6 +35,7 @@ public class Deployment {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "build_id", nullable = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
+    @JsonIgnore
     private Build build;
     @Column(nullable = false, unique = true)
     private String containerId;

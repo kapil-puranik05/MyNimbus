@@ -14,6 +14,7 @@ import com.infra.mynimbus.exceptions.ContainerStopException;
 import com.infra.mynimbus.exceptions.InvalidCredentialsException;
 import com.infra.mynimbus.exceptions.InvalidPortException;
 import com.infra.mynimbus.exceptions.InvalidZipFileException;
+import com.infra.mynimbus.exceptions.OwnerShipException;
 import com.infra.mynimbus.exceptions.PortAllocationException;
 import com.infra.mynimbus.exceptions.UserAlreadyExistsException;
 import com.infra.mynimbus.exceptions.UserNotFoundException;
@@ -115,6 +116,14 @@ public class GlobalExceptionHandler {
         response.setMessage(e.getMessage());
         response.setStatus(HttpStatus.NOT_FOUND.value());
         return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(OwnerShipException.class)
+    public ResponseEntity<?> handleOwnershipException(OwnerShipException e) {
+        ErrorResponse response = new ErrorResponse();
+        response.setMessage(e.getMessage());
+        response.setStatus(HttpStatus.FORBIDDEN.value());
+        return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler(Exception.class)

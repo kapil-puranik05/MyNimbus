@@ -4,5 +4,5 @@ import lombok.Data;
 
 @Data
 public class BuildResponse {
-    private String containerId;
+    private String imageName;
 }

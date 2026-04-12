@@ -5,7 +5,7 @@ import java.util.Map;
 import lombok.Data;
 
 @Data
-public class RunContainerRequest {
+public class ContainerizationRequest {
     private String imageName;
     private Map<String, String> envVars;
 }

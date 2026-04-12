@@ -29,6 +29,7 @@ import com.infra.mynimbus.exceptions.CommandExecutionException;
 import com.infra.mynimbus.exceptions.ContainerNotFoundException;
 import com.infra.mynimbus.exceptions.InvalidPortException;
 import com.infra.mynimbus.exceptions.InvalidZipFileException;
+import com.infra.mynimbus.exceptions.OwnerShipException;
 import com.infra.mynimbus.exceptions.PortAllocationException;
 import com.infra.mynimbus.exceptions.UserNotFoundException;
 import com.infra.mynimbus.exceptions.WorkerFailureException;
@@ -65,7 +66,6 @@ public class DeploymentService {
             build.setUser(user);
             build.setImageName("Building...");
             build.setStatus(BuildStatus.BUILDING);
-            
             String userId = user.getUserId().toString();
             String workerPath = baseUrl + "/worker";
             String zipPath = workerPath + "/zip";
@@ -75,7 +75,7 @@ public class DeploymentService {
             String filename = userId + "_" + System.currentTimeMillis() + "_" + shortId + ".zip";
             Path filePath = userDir.resolve(filename);
             Files.copy(file.getInputStream(), filePath);
-            build.setZipPath(zipPath);
+            build.setZipPath(zipPath + userId);
             build.setFilename(filename);
             buildRepository.save(build);
             ProcessBuilder pb = new ProcessBuilder("/usr/local/go/bin/go", "run", "./cmd", filePath.toAbsolutePath().toString());
@@ -111,7 +111,7 @@ public class DeploymentService {
             build.setStatus(BuildStatus.SUCCESS);
             buildRepository.save(build);
             BuildResponse response = new BuildResponse();
-            response.setContainerId(result);
+            response.setImageName(result);
             return response;
         } catch(InvalidZipFileException e) {
             throw e;
@@ -148,6 +148,11 @@ public class DeploymentService {
         System.out.println("Running command: " + String.join(" ", command));
         Deployment deployment = new Deployment();
         Build build = buildRepository.findByImageName(imageName).orElseThrow(() -> new BuildNotFoundException("Build with given image name was not found"));
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        AppUser user = userRepository.findByEmail(auth.getName()).get();
+        if(!build.getUser().getUserId().equals(user.getUserId())) {
+            throw new OwnerShipException("The provided image is not owned by the current user.");
+        }
         deployment.setBuild(build);
         deployment.setStatus(DeploymentStatus.PENDING);
         deployment.setContainerPort(containerPort);
@@ -208,8 +213,17 @@ public class DeploymentService {
         System.out.println("Running command: " + String.join(" ", pb.command()));
         pb.redirectErrorStream(true);
         Deployment deployment = deploymentRepository.findByContainerId(containerId).orElseThrow(() -> new ContainerNotFoundException("Container with given container id not found"));
+        Build build = deployment.getBuild();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        AppUser user = userRepository.findByEmail(auth.getName()).get();
+        if(!build.getUser().getUserId().equals(user.getUserId())) {
+            throw new OwnerShipException("The provided container is not owned by the current user");
+        }
         if("stop".equals(command) && !deployment.getStatus().equals(DeploymentStatus.RUNNING)) {
             throw new ContainerStopException("Container is not running");
+        }
+        if("start".equals(command) && !deployment.getStatus().equals(DeploymentStatus.STOPPED)) {
+            throw new ContainerStartException("Container is already running");
         }
         try {
             Process process = pb.start();
@@ -223,6 +237,10 @@ public class DeploymentService {
             }
             if("stop".equals(command)) {
                 deployment.setStatus(DeploymentStatus.STOPPED);
+                deploymentRepository.save(deployment);
+            }
+            if("start".equals(command)) {
+                deployment.setStatus(DeploymentStatus.RUNNING);
                 deploymentRepository.save(deployment);
             }
             return output.trim();
@@ -269,6 +287,13 @@ public class DeploymentService {
     }
 
     public List<Deployment> getDeploymentsByBuild(UUID buildId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String email = auth.getName();
+        UUID userId = userRepository.findByEmail(email).get().getUserId();
+        Build build = buildRepository.findById(buildId).orElseThrow(() -> new BuildNotFoundException("Build with given build id was not found"));
+        if(!build.getUser().getUserId().equals(userId)) {
+            throw new OwnerShipException("The build with given user id is not owned by the current user");
+        }
         return deploymentRepository.getDeploymentsByBuildId(buildId);
     }
 
@@ -277,6 +302,11 @@ public class DeploymentService {
             throw new BuildNotFoundException("Build with given Id was not found");
         }
         Build build = buildRepository.findById(buildId).get();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        AppUser user = userRepository.findByEmail(auth.getName()).get();
+        if(!build.getUser().getUserId().equals(user.getUserId())) {
+            throw new OwnerShipException("The provided container is not owned by the current user");
+        }
         List<Deployment> deployments = deploymentRepository.getDeploymentsByBuildId(buildId);
         for(Deployment deployment : deployments) {
             String containerId = deployment.getContainerId();
@@ -288,5 +318,17 @@ public class DeploymentService {
         String imageName = build.getImageName();
         removeImage(imageName);
         buildRepository.deleteById(buildId);
+    }
+
+    public void deleteContainer(String containerId) {
+        Deployment deployment = deploymentRepository.findByContainerId(containerId).orElseThrow(() -> new ContainerNotFoundException("Container with given container id was not found"));
+        Build build = deployment.getBuild();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        AppUser user = userRepository.findByEmail(auth.getName()).get();
+        if(!user.getUserId().equals(build.getUser().getUserId())) {
+            throw new OwnerShipException("The provided container is not owned by the current user");
+        }
+        removeContainer(containerId);
+        deploymentRepository.deleteById(deployment.getDeploymentId());
     }
 }

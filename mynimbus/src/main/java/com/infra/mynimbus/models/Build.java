@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.infra.mynimbus.util.BuildStatus;
 
 import jakarta.persistence.Column;
@@ -34,6 +35,7 @@ public class Build {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
+    @JsonIgnore
     private AppUser user;
     @Column(nullable = false, unique = true)
     private String imageName;

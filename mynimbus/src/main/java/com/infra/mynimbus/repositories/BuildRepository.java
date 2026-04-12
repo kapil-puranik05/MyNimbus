@@ -13,7 +13,7 @@ import com.infra.mynimbus.models.Build;
 public interface BuildRepository extends JpaRepository<Build, UUID> {
     @Query(value = "SELECT * FROM builds b WHERE b.user_id = :userId", nativeQuery = true)
     List<Build> getBuildsByUserId(UUID userId);
-    @Query(value = "SELECT b.zip_path, b.filename FROM builds b WHERE created_at < NOW() - INTERVAL '1 hour'", nativeQuery = true)
+    @Query(value = "SELECT b.zip_path AS zipPath, b.filename as filename FROM builds b WHERE created_at < NOW() - INTERVAL '1 hour'", nativeQuery = true)
     List<FileDeletionMetaData> getOlderFiles();
     Optional<Build> findByImageName(String imageName);
 }
