@@ -25,7 +25,7 @@ public class Scheduler {
         List<FileDeletionMetaData> olderFiles = buildRepository.getOlderFiles();
         System.out.println("Executing Zip deletion job");
         for(FileDeletionMetaData data : olderFiles) {
-            Path filePath = Paths.get(data.getZipPath(), data.getFilename());
+            Path filePath = Paths.get(data.getZipPath(), "/", data.getFilename());
             System.out.println(data.getZipPath() + "/" + data.getFilename());
             try {
                 Files.delete(filePath);

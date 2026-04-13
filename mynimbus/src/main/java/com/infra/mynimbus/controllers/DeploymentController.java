@@ -18,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.infra.mynimbus.dtos.CommandExecutionRequest;
 import com.infra.mynimbus.dtos.ContainerDeletionRequest;
 import com.infra.mynimbus.dtos.ImageDeletionRequest;
+import com.infra.mynimbus.dtos.PortRequest;
 import com.infra.mynimbus.dtos.RunContainerRequest;
 import com.infra.mynimbus.dtos.ContainerizationRequest;
 import com.infra.mynimbus.services.DeploymentService;
@@ -75,6 +76,11 @@ public class DeploymentController {
     public ResponseEntity<?> deleteContainer(@RequestBody ContainerDeletionRequest request) {
         service.deleteContainer(request.getContainerId());
         return new ResponseEntity<>("Container " + request.getContainerId() + " removed ", HttpStatus.OK);
+    }
+
+    @PostMapping("/get-app-port")
+    public ResponseEntity<?> getAppPort(@RequestBody PortRequest request) {
+        return new ResponseEntity<>(service.getAppPort(request), HttpStatus.OK);
     }
 }
 

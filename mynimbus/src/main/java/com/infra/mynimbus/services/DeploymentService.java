@@ -21,6 +21,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.infra.mynimbus.dtos.BuildResponse;
 import com.infra.mynimbus.dtos.ContainerizationRequest;
+import com.infra.mynimbus.dtos.PortRequest;
+import com.infra.mynimbus.dtos.PortResponse;
 import com.infra.mynimbus.dtos.RunContainerResponse;
 import com.infra.mynimbus.exceptions.ContainerStartException;
 import com.infra.mynimbus.exceptions.ContainerStopException;
@@ -330,5 +332,18 @@ public class DeploymentService {
         }
         removeContainer(containerId);
         deploymentRepository.deleteById(deployment.getDeploymentId());
+    }
+
+    public PortResponse getAppPort(PortRequest request) {
+        Deployment deployment = deploymentRepository.findById(request.getDeploymentId()).orElseThrow(() -> new ContainerNotFoundException("Container with given deployment id not found"));
+        Build build = deployment.getBuild();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        AppUser user = userRepository.findByEmail(auth.getName()).get();
+        if(!user.getUserId().equals(build.getUser().getUserId())) {
+            throw new OwnerShipException("The container with given deployment id is not owned by the current user");
+        }
+        PortResponse response = new PortResponse();
+        response.setHostPort(deployment.getHostPort());
+        return response;
     }
 }
