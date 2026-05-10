@@ -33,7 +33,8 @@ public class DeploymentController {
 
     @PostMapping(value = "/build", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> handleBuild(@RequestPart("file") MultipartFile zipFile) {
-        return new ResponseEntity<>(service.buildImage(zipFile), HttpStatus.OK);
+        service.buildImage(zipFile);
+        return new ResponseEntity<>("Build will be created shortly", HttpStatus.OK);
     }
 
     @PostMapping("/containerize-image")

@@ -1,13 +1,9 @@
 package com.infra.mynimbus.services;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +15,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.infra.mynimbus.dtos.BuildResponse;
 import com.infra.mynimbus.dtos.ContainerizationRequest;
 import com.infra.mynimbus.dtos.PortRequest;
 import com.infra.mynimbus.dtos.PortResponse;
@@ -30,18 +25,15 @@ import com.infra.mynimbus.exceptions.BuildNotFoundException;
 import com.infra.mynimbus.exceptions.CommandExecutionException;
 import com.infra.mynimbus.exceptions.ContainerNotFoundException;
 import com.infra.mynimbus.exceptions.InvalidPortException;
-import com.infra.mynimbus.exceptions.InvalidZipFileException;
 import com.infra.mynimbus.exceptions.OwnerShipException;
 import com.infra.mynimbus.exceptions.PortAllocationException;
 import com.infra.mynimbus.exceptions.UserNotFoundException;
-import com.infra.mynimbus.exceptions.WorkerFailureException;
 import com.infra.mynimbus.models.AppUser;
 import com.infra.mynimbus.models.Build;
 import com.infra.mynimbus.models.Deployment;
 import com.infra.mynimbus.repositories.BuildRepository;
 import com.infra.mynimbus.repositories.DeploymentRepository;
 import com.infra.mynimbus.repositories.UserRepository;
-import com.infra.mynimbus.util.BuildStatus;
 import com.infra.mynimbus.util.DeploymentStatus;
 
 import lombok.RequiredArgsConstructor;
@@ -52,79 +44,16 @@ public class DeploymentService {
     private final UserRepository userRepository;
     private final BuildRepository buildRepository;
     private final DeploymentRepository deploymentRepository;
+    private final WorkerService workerService;
 
     @Value("${base.url}")
     public String baseUrl;
 
-    public BuildResponse buildImage(MultipartFile file) {
-        try {
-            if (file.isEmpty() || !file.getOriginalFilename().endsWith(".zip")) {
-                throw new InvalidZipFileException("Please upload a valid zip file");
-            }
-            Build build = new Build();
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            String email = auth.getName();
-            AppUser user = userRepository.findByEmail(email).orElseThrow(() -> new UserNotFoundException("User with given email not found"));
-            build.setUser(user);
-            build.setImageName("Building...");
-            build.setStatus(BuildStatus.BUILDING);
-            String userId = user.getUserId().toString();
-            String workerPath = baseUrl + "/worker";
-            String zipPath = workerPath + "/zip";
-            Path userDir = Paths.get(zipPath, userId);
-            Files.createDirectories(userDir);
-            String shortId = UUID.randomUUID().toString().substring(0, 8);
-            String filename = userId + "_" + System.currentTimeMillis() + "_" + shortId + ".zip";
-            Path filePath = userDir.resolve(filename);
-            Files.copy(file.getInputStream(), filePath);
-            build.setZipPath(zipPath + userId);
-            build.setFilename(filename);
-            buildRepository.save(build);
-            ProcessBuilder pb = new ProcessBuilder("/usr/local/go/bin/go", "run", "./cmd", filePath.toAbsolutePath().toString());
-            pb.directory(new File(workerPath));
-            pb.redirectErrorStream(true);
-            System.out.println("User: " + userId);
-            System.out.println("File: " + filename);
-            Process process = pb.start();
-            String result = null;
-            try(BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while((line = br.readLine()) != null) {
-                    System.out.println("[WORKER] " + line);
-                    if(line.startsWith("RESULT: ")) {
-                        result = line.substring("RESULT: ".length()).trim();
-                    }
-                }
-            }
-            int exitCode = process.waitFor();
-            if(exitCode != 0) {
-                build.setStatus(BuildStatus.FAILED);
-                build.setImageName("-x-");
-                buildRepository.save(build);
-                throw new WorkerFailureException("Worker failed with exit code: " + exitCode);
-            }
-            if(result == null || result.isBlank()) {
-                build.setStatus(BuildStatus.FAILED);
-                build.setImageName("-x-");
-                buildRepository.save(build);
-                throw new WorkerFailureException("Worker did not return a result");
-            }
-            build.setImageName(result);
-            build.setStatus(BuildStatus.SUCCESS);
-            buildRepository.save(build);
-            BuildResponse response = new BuildResponse();
-            response.setImageName(result);
-            return response;
-        } catch(InvalidZipFileException e) {
-            throw e;
-        } catch(IOException e) {
-            throw new WorkerFailureException("File handling failed" + e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new WorkerFailureException("Worker execution interrupted" + e);
-        } catch (Exception e) {
-            throw new WorkerFailureException("Unexpected failure during deployment" + e);
-        }
+    public void buildImage(MultipartFile file) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String email = auth.getName();
+        AppUser user = userRepository.findByEmail(email).orElseThrow(() -> new UserNotFoundException("User with given email not found"));
+        workerService.buildImageAsync(file, user);
     }
 
     public RunContainerResponse containerize(ContainerizationRequest request) {

@@ -20,7 +20,7 @@ import lombok.RequiredArgsConstructor;
 public class Scheduler {
     private final BuildRepository buildRepository;
 
-    @Scheduled(fixedRate = 3600000)
+    @Scheduled(fixedDelay = 3600000)
     public void zipCleanup() {
         List<FileDeletionMetaData> olderFiles = buildRepository.getOlderFiles();
         System.out.println("Executing Zip deletion job");
@@ -40,7 +40,7 @@ public class Scheduler {
         }
     }
 
-    @Scheduled(fixedRate = 7200000)
+    @Scheduled(fixedDelay = 7200000)
     public void cleanFailedEntries() {
         buildRepository.deleteFailedBuilds();
     }
