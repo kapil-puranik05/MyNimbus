@@ -21,7 +21,7 @@ public class Scheduler {
     private final BuildRepository buildRepository;
 
     @Scheduled(fixedRate = 3600000)
-    public void runTask() {
+    public void zipCleanup() {
         List<FileDeletionMetaData> olderFiles = buildRepository.getOlderFiles();
         System.out.println("Executing Zip deletion job");
         for(FileDeletionMetaData data : olderFiles) {
@@ -38,5 +38,10 @@ public class Scheduler {
                 System.out.println("Error occured while deleting the file");
             }
         }
+    }
+
+    @Scheduled(fixedRate = 7200000)
+    public void cleanFailedEntries() {
+        buildRepository.deleteFailedBuilds();
     }
 }

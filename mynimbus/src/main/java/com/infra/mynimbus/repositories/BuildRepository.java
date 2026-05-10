@@ -5,10 +5,13 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 import com.infra.mynimbus.dtos.FileDeletionMetaData;
 import com.infra.mynimbus.models.Build;
+
+import jakarta.transaction.Transactional;
 
 public interface BuildRepository extends JpaRepository<Build, UUID> {
     @Query(value = "SELECT * FROM builds b WHERE b.user_id = :userId", nativeQuery = true)
@@ -16,4 +19,8 @@ public interface BuildRepository extends JpaRepository<Build, UUID> {
     @Query(value = "SELECT b.zip_path AS zipPath, b.filename as filename FROM builds b WHERE created_at < NOW() - INTERVAL '1 hour'", nativeQuery = true)
     List<FileDeletionMetaData> getOlderFiles();
     Optional<Build> findByImageName(String imageName);
+    @Modifying
+    @Transactional
+    @Query(value = "DELETE FROM builds b WHERE b.status = 'FAILED'", nativeQuery = true)
+    void deleteFailedBuilds();
 }
