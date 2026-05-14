@@ -4,3 +4,5 @@ export DB_URL=jdbc:postgresql://localhost:5432/mynimbus
 export DB_USER=postgres
 export DB_PASSWORD=root
 export SERVER_PORT=8081
+export REDIS_HOST=localhost
+export REDIS_PORT=6379
