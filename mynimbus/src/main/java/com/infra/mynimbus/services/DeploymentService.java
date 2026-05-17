@@ -4,6 +4,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.infra.mynimbus.dtos.ContainerizationRequest;
+import com.infra.mynimbus.dtos.DockerEvent;
 import com.infra.mynimbus.dtos.PortRequest;
 import com.infra.mynimbus.dtos.PortResponse;
 import com.infra.mynimbus.dtos.RunContainerResponse;
@@ -25,9 +30,11 @@ import com.infra.mynimbus.exceptions.BuildNotFoundException;
 import com.infra.mynimbus.exceptions.CommandExecutionException;
 import com.infra.mynimbus.exceptions.ContainerNotFoundException;
 import com.infra.mynimbus.exceptions.InvalidPortException;
+import com.infra.mynimbus.exceptions.InvalidZipFileException;
 import com.infra.mynimbus.exceptions.OwnerShipException;
 import com.infra.mynimbus.exceptions.PortAllocationException;
 import com.infra.mynimbus.exceptions.UserNotFoundException;
+import com.infra.mynimbus.exceptions.WorkerFailureException;
 import com.infra.mynimbus.models.AppUser;
 import com.infra.mynimbus.models.Build;
 import com.infra.mynimbus.models.Deployment;
@@ -36,6 +43,7 @@ import com.infra.mynimbus.repositories.DeploymentRepository;
 import com.infra.mynimbus.repositories.UserRepository;
 import com.infra.mynimbus.util.DeploymentStatus;
 
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -53,7 +61,16 @@ public class DeploymentService {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = auth.getName();
         AppUser user = userRepository.findByEmail(email).orElseThrow(() -> new UserNotFoundException("User with given email not found"));
-        workerService.buildImageAsync(file, user);
+        if (file.isEmpty() || !file.getOriginalFilename().endsWith(".zip")) {
+            throw new InvalidZipFileException("Please upload a valid zip file");
+        }
+        try {
+            Path tempPath = Files.createTempFile("mynimbus-upload-", ".zip");
+            file.transferTo(tempPath);
+            workerService.buildImageAsync(tempPath, user);
+        } catch (IOException e) {
+            throw new WorkerFailureException("File handling failed " + e);
+        }
     }
 
     public RunContainerResponse containerize(ContainerizationRequest request) {
@@ -274,5 +291,21 @@ public class DeploymentService {
         PortResponse response = new PortResponse();
         response.setHostPort(deployment.getHostPort());
         return response;
+    }
+
+    @Transactional
+    public void applyContainerStateChange(DockerEvent event, String containerId) {
+        Deployment deployment = deploymentRepository.findByContainerId(containerId).orElseThrow(() -> new ContainerNotFoundException("This event does not concern the db state"));
+        Instant updatedInstant = deployment.getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant();
+        long updatedAtNanos = updatedInstant.getEpochSecond() * 1_000_000_000L + updatedInstant.getNano();
+        if(event.getTimeNano() > updatedAtNanos) {
+            if("start".equals(event.getAction()) || "restart".equals(event.getAction()) || "unpause".equals(event.getAction())) {
+                deployment.setStatus(DeploymentStatus.RUNNING);
+            } else if("stop".equals(event.getAction()) || "die".equals(event.getAction()) || "pause".equals(event.getAction()) || "oom".equals(event.getAction())) {
+                deployment.setStatus(DeploymentStatus.STOPPED);
+            } else if("destroy".equals(event.getAction())) {
+                deploymentRepository.delete(deployment);
+            }
+        }
     }
 }

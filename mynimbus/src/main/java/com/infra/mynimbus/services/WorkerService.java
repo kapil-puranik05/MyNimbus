@@ -12,9 +12,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
-import com.infra.mynimbus.exceptions.InvalidZipFileException;
 import com.infra.mynimbus.exceptions.WorkerFailureException;
 import com.infra.mynimbus.models.AppUser;
 import com.infra.mynimbus.models.Build;
@@ -32,11 +30,8 @@ public class WorkerService {
     public String baseUrl;
 
     @Async("workerExecutor")
-    public void buildImageAsync(MultipartFile file, AppUser user) {
+    public void buildImageAsync(Path uploadedFile, AppUser user) {
         try {
-            if (file.isEmpty() || !file.getOriginalFilename().endsWith(".zip")) {
-                throw new InvalidZipFileException("Please upload a valid zip file");
-            }
             Build build = new Build();
             build.setUser(user);
             build.setImageName("Building...");
@@ -49,11 +44,11 @@ public class WorkerService {
             String shortId = UUID.randomUUID().toString().substring(0, 8);
             String filename = userId + "_" + System.currentTimeMillis() + "_" + shortId + ".zip";
             Path filePath = userDir.resolve(filename);
-            Files.copy(file.getInputStream(), filePath);
+            Files.copy(uploadedFile, filePath);
             build.setZipPath(zipPath + userId);
             build.setFilename(filename);
             buildRepository.save(build);
-            ProcessBuilder pb = new ProcessBuilder("/usr/local/go/bin/go", "run", "./cmd", filePath.toAbsolutePath().toString());
+            ProcessBuilder pb = new ProcessBuilder("/usr/local/go/bin/go","run","./cmd",filePath.toAbsolutePath().toString());
             pb.directory(new File(workerPath));
             pb.redirectErrorStream(true);
             System.out.println("User: " + userId);
@@ -86,8 +81,6 @@ public class WorkerService {
             build.setStatus(BuildStatus.SUCCESS);
             buildRepository.save(build);
             System.out.println("Build created successfully with image name: " + build.getImageName());
-        } catch (InvalidZipFileException e) {
-            throw e;
         } catch (IOException e) {
             throw new WorkerFailureException("File handling failed" + e);
         } catch (InterruptedException e) {
@@ -95,6 +88,11 @@ public class WorkerService {
             throw new WorkerFailureException("Worker execution interrupted" + e);
         } catch (Exception e) {
             throw new WorkerFailureException("Unexpected failure during deployment" + e);
+        } finally {
+            try {
+                Files.deleteIfExists(uploadedFile);
+            } catch (IOException ignored) {
+            }
         }
     }
 }
