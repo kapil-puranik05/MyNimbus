@@ -3,7 +3,7 @@ package com.infra.streamer.producers;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
-import com.infra.streamer.dto.CustomDockerEvent;
+import com.infra.streamer.dtos.CustomDockerEvent;
 
 import lombok.RequiredArgsConstructor;
 

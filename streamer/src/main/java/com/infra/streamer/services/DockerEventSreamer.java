@@ -10,8 +10,8 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.infra.streamer.dto.CustomDockerEvent;
-import com.infra.streamer.dto.DockerEvent;
+import com.infra.streamer.dtos.CustomDockerEvent;
+import com.infra.streamer.dtos.DockerEvent;
 import com.infra.streamer.producers.DockerEventProducer;
 
 import lombok.RequiredArgsConstructor;
@@ -45,6 +45,7 @@ public class DockerEventSreamer implements ApplicationRunner {
                         customDockerEvent.setContainerName(event.getActor().getContainerName());
                         customDockerEvent.setAction(event.getAction());
                         customDockerEvent.setExitCode(event.getActor().getExitCode());
+                        customDockerEvent.setTimeNano(event.getTimeNano());
                         producer.publishEvent(event.getActor().getId(), customDockerEvent);
                     }
                 }

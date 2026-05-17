@@ -1,4 +1,4 @@
-package com.infra.streamer.dto;
+package com.infra.streamer.dtos;
 
 import java.util.Map;
 
