@@ -1,6 +1,7 @@
 package com.infra.mynimbus.listeners;
 
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
@@ -13,9 +14,10 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class DockerEventListener {
     @KafkaListener(topics = "docker-events-stream", groupId = "docker-events-group")
-    public void listen(DockerEvent event, @Header(KafkaHeaders.RECEIVED_KEY) String key) {
+    public void listen(DockerEvent event, @Header(KafkaHeaders.RECEIVED_KEY) String key, Acknowledgment ack) {
         System.out.println("Event received");
         System.out.println("ContainerId: " + key);
         System.out.println("Action: " + event.getAction());
+        ack.acknowledge();
     }
 }
