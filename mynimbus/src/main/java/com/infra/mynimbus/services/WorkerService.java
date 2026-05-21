@@ -90,6 +90,7 @@ public class WorkerService {
             throw new WorkerFailureException("Unexpected failure during deployment" + e);
         } finally {
             try {
+                System.out.println("Deleting the uploaded zip file");
                 Files.deleteIfExists(uploadedFile);
             } catch (IOException ignored) {
             }

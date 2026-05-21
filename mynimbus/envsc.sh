@@ -6,3 +6,5 @@ export DB_PASSWORD=root
 export SERVER_PORT=8081
 export REDIS_HOST=localhost
 export REDIS_PORT=6379
+export KAFKA_BROKERS=localhost:9092
+export CONSUMER_GROUP_ID=docker-events-group

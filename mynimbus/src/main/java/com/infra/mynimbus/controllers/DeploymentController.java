@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,8 +33,10 @@ public class DeploymentController {
     private final DeploymentService service;
 
     @PostMapping(value = "/build", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<?> handleBuild(@RequestPart("file") MultipartFile zipFile) {
-        service.buildImage(zipFile);
+    public ResponseEntity<?> handleBuild(@RequestPart("file") MultipartFile zipFile, @RequestHeader("Authorization") String headeString) {
+        if(service.acquireUploadLock(headeString, zipFile)) {
+            service.buildImage(zipFile);
+        }
         return new ResponseEntity<>("Build will be created shortly", HttpStatus.OK);
     }
 

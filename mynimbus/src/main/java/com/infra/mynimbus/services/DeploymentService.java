@@ -2,18 +2,26 @@ package com.infra.mynimbus.services;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -42,6 +50,7 @@ import com.infra.mynimbus.repositories.BuildRepository;
 import com.infra.mynimbus.repositories.DeploymentRepository;
 import com.infra.mynimbus.repositories.UserRepository;
 import com.infra.mynimbus.util.DeploymentStatus;
+import com.infra.mynimbus.util.JwtUtil;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +62,8 @@ public class DeploymentService {
     private final BuildRepository buildRepository;
     private final DeploymentRepository deploymentRepository;
     private final WorkerService workerService;
+    private final RedisTemplate<String, String> redisTemplate;
+    private final JwtUtil jwtUtil;
 
     @Value("${base.url}")
     public String baseUrl;
@@ -306,6 +317,36 @@ public class DeploymentService {
             } else if("destroy".equals(event.getAction())) {
                 deploymentRepository.delete(deployment);
             }
+        }
+    }
+
+    public boolean acquireUploadLock(String authHeader, MultipartFile file) {
+        try {
+            String fileHash = computeHash(file);
+            String token = authHeader.substring(7);
+            String email = jwtUtil.extractUsername(token);
+            String key = "upload:" + email + ":" + fileHash;
+            Boolean inserted = redisTemplate.opsForValue().setIfAbsent(key, "1", Duration.ofMinutes(10));
+            return Boolean.TRUE.equals(inserted);
+        } catch(RedisConnectionFailureException e) {
+            System.out.println("Redis is unavailable, allowing uploads without deduplication");
+            return true;
+        }
+    }
+
+    private String computeHash(MultipartFile file) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (InputStream is = file.getInputStream(); DigestInputStream dis = new DigestInputStream(is, digest)) {
+                byte[] buffer = new byte[8192];
+                while (dis.read(buffer) != -1) {}
+            }
+            byte[] hash = digest.digest();
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 algorithm unavailable", e);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read uploaded file", e);
         }
     }
 }

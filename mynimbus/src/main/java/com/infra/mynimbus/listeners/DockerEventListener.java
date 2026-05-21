@@ -7,6 +7,7 @@ import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
 import com.infra.mynimbus.dtos.DockerEvent;
+import com.infra.mynimbus.exceptions.ContainerNotFoundException;
 import com.infra.mynimbus.services.DeploymentService;
 
 import lombok.RequiredArgsConstructor;
@@ -21,7 +22,12 @@ public class DockerEventListener {
         System.out.println("Event received");
         System.out.println("ContainerId: " + key);
         System.out.println("Action: " + event.getAction());
-        deploymentService.applyContainerStateChange(event, key);
-        ack.acknowledge();
+        try {
+            deploymentService.applyContainerStateChange(event, key);
+            ack.acknowledge();
+        } catch(ContainerNotFoundException e) {
+            System.out.println("Ignoring unrelated docker event: " + key);
+            ack.acknowledge();
+        }
     }
 }
