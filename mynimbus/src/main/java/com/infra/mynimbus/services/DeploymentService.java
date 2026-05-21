@@ -68,7 +68,7 @@ public class DeploymentService {
     @Value("${base.url}")
     public String baseUrl;
 
-    public void buildImage(MultipartFile file) {
+    public void buildImage(MultipartFile file, String key) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = auth.getName();
         AppUser user = userRepository.findByEmail(email).orElseThrow(() -> new UserNotFoundException("User with given email not found"));
@@ -78,7 +78,7 @@ public class DeploymentService {
         try {
             Path tempPath = Files.createTempFile("mynimbus-upload-", ".zip");
             file.transferTo(tempPath);
-            workerService.buildImageAsync(tempPath, user);
+            workerService.buildImageAsync(tempPath, user, key);
         } catch (IOException e) {
             throw new WorkerFailureException("File handling failed " + e);
         }
@@ -320,17 +320,20 @@ public class DeploymentService {
         }
     }
 
-    public boolean acquireUploadLock(String authHeader, MultipartFile file) {
+    public String acquireUploadLock(String authHeader, MultipartFile file) {
         try {
             String fileHash = computeHash(file);
             String token = authHeader.substring(7);
             String email = jwtUtil.extractUsername(token);
             String key = "upload:" + email + ":" + fileHash;
             Boolean inserted = redisTemplate.opsForValue().setIfAbsent(key, "1", Duration.ofMinutes(10));
-            return Boolean.TRUE.equals(inserted);
+            if(!Boolean.TRUE.equals(inserted)) {
+                return null;
+            }
+            return key;
         } catch(RedisConnectionFailureException e) {
             System.out.println("Redis is unavailable, allowing uploads without deduplication");
-            return true;
+            return "-x-";
         }
     }
 

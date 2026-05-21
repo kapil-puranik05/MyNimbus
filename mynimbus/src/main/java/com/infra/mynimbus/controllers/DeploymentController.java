@@ -33,9 +33,12 @@ public class DeploymentController {
     private final DeploymentService service;
 
     @PostMapping(value = "/build", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<?> handleBuild(@RequestPart("file") MultipartFile zipFile, @RequestHeader("Authorization") String headeString) {
-        if(service.acquireUploadLock(headeString, zipFile)) {
-            service.buildImage(zipFile);
+    public ResponseEntity<?> handleBuild(@RequestPart("file") MultipartFile zipFile, @RequestHeader("Authorization") String header) {
+        String result = service.acquireUploadLock(header, zipFile);
+        if(result == null) {
+            return new ResponseEntity<>("Build is already in progress", HttpStatus.OK);
+        } else if(result.equals("-x-") || !result.isBlank()) {
+            service.buildImage(zipFile, result);
         }
         return new ResponseEntity<>("Build will be created shortly", HttpStatus.OK);
     }

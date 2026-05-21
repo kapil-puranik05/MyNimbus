@@ -10,6 +10,7 @@ import java.nio.file.Paths;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -25,12 +26,13 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class WorkerService {
     private final BuildRepository buildRepository;
+    private final RedisTemplate<String, String> redisTemplate;
 
     @Value("${base.url}")
     public String baseUrl;
 
     @Async("workerExecutor")
-    public void buildImageAsync(Path uploadedFile, AppUser user) {
+    public void buildImageAsync(Path uploadedFile, AppUser user, String key) {
         try {
             Build build = new Build();
             build.setUser(user);
@@ -69,6 +71,9 @@ public class WorkerService {
                 build.setStatus(BuildStatus.FAILED);
                 build.setImageName("-x-");
                 buildRepository.save(build);
+                if(!key.equals("-x-") && !key.isBlank()) {
+                    redisTemplate.delete(key);
+                }
                 throw new WorkerFailureException("Worker failed with exit code: " + exitCode);
             }
             if (result == null || result.isBlank()) {
